@@ -1,4 +1,4 @@
-export const getByTitle = (req, res) => {
+export const getByTitle = async (req, res) => {
     try {
         const { title } = req.params; // busaca usando o titutlo definido no Model
         const news = await Noticia.find({
