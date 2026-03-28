@@ -1,36 +1,129 @@
 import Noticia from "../models/Noticia.js";
 
-export const getByTitle = async (req, res) => {
+const notExpired = {
+    $or: [
+        { dataExpiracao: { $gte: new Date() } },
+        { dataExpiracao: { $exists: false } },
+        { dataExpiracao: null }
+    ]
+};
+
+export const getAllNews = async (req, res, next) => {
     try {
-        const { title } = req.params; // busaca usando o titutlo definido no Model
-        const news = await Noticia.find({
-            titulo: { $regex: title, $options: 'i'}
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const filter = notExpired;
+
+        const [news, total] = await Promise.all([
+            Noticia.find(filter)
+                .sort({ destaque: -1, dataPublicacao: -1 })
+                .skip(skip)
+                .limit(limit),
+            Noticia.countDocuments(filter)
+        ]);
+
+        res.status(200).json({
+            data: news,
+            page,
+            totalPages: Math.ceil(total / limit),
+            total
         });
-        res.status(200).json(news);
     } catch (error) {
-        res.status(500).json({ message: "Erro ao buscar por título", error: error.menssage });
+        next(error);
     }
-
 };
 
-export const getByBetweenDate = (req, res) => {
-    const { dataInicio, dataFim } = req.query;
-    const query = {
-        data_publicacao: {
-            $gte: new Date(dataInicio),
-            $lte: new Date(dataFim)
-        }
-    };
-    res.json(query)
-};
-
-export const getByCategory = async (req, res) => {
+export const getById = async (req, res, next) => {
     try {
-        const { category } = req.params;
-        const news = await Noticia.find({ categoria: category });
+        const news = await Noticia.findById(req.params.id);
+        if (!news) return res.status(404).json({ message: "Notícia não encontrada" });
         res.status(200).json(news);
     } catch (error) {
-        res.status(500).json({ message: "Erro ao buscar por categoria", error: error.message });
+        next(error);
     }
+};
 
+export const getByTitle = async (req, res, next) => {
+    try {
+        const news = await Noticia.find({
+            titulo: { $regex: req.params.title, $options: 'i' }
+        }).sort({ dataPublicacao: -1 });
+        res.status(200).json(news);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getByDate = async (req, res, next) => {
+    try {
+        const { startDate, endDate } = req.params;
+        const news = await Noticia.find({
+            dataPublicacao: {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            }
+        }).sort({ dataPublicacao: -1 });
+        res.status(200).json(news);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getByCategory = async (req, res, next) => {
+    try {
+        const news = await Noticia.find({
+            categorias: req.params.category
+        }).sort({ dataPublicacao: -1 });
+        res.status(200).json(news);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getFeatured = async (req, res, next) => {
+    try {
+        const news = await Noticia.find({
+            destaque: true,
+            ...notExpired
+        }).sort({ dataPublicacao: -1 });
+        res.status(200).json(news);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const createNews = async (req, res, next) => {
+    try {
+        const noticia = new Noticia(req.body);
+        const saved = await noticia.save();
+        res.status(201).json(saved);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateNews = async (req, res, next) => {
+    try {
+        const news = await Noticia.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true, runValidators: true }
+        );
+        if (!news) return res.status(404).json({ message: "Notícia não encontrada" });
+        res.status(200).json(news);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const deleteNews = async (req, res, next) => {
+    try {
+        const news = await Noticia.findByIdAndDelete(req.params.id);
+        if (!news) return res.status(404).json({ message: "Notícia não encontrada" });
+        res.status(200).json({ message: "Notícia removida" });
+    } catch (error) {
+        next(error);
+    }
 };
